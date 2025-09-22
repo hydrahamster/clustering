@@ -23,7 +23,8 @@ pacman::p_load(
   janitor,
   DataExplorer,
   bodlR,
-  gtsummary
+  gtsummary,
+  ggstatsplot
 )
 
 data_base <- readRDS("../metadata-processing/data_base_mar25.rds")
@@ -91,6 +92,19 @@ data_onset <- data_phenotypes %>%
   )) %>%
   mutate(duration_cat = as_factor(duration_cat)) %>%
   mutate(duration_cat = fct_relevel(duration_cat, "11-20 yrs", after = 1))  %>%
+  mutate(duration_cat2 = case_when(
+    t2dm_diag_yrs_since_adj < 5 ~ "0-4 yrs",
+    t2dm_diag_yrs_since_adj < 10 ~ "5-9 yrs",
+    t2dm_diag_yrs_since_adj < 15 ~ "10-14 yrs",
+    t2dm_diag_yrs_since_adj < 20 ~ "15-19 yrs",
+    t2dm_diag_yrs_since_adj < 25 ~ "20-24 yrs",
+    t2dm_diag_yrs_since_adj < 30 ~ "25-29 yrs",
+    t2dm_diag_yrs_since_adj > 29 ~ "30+ yrs",
+    is.na(t2dm_diag_yrs_since_adj) ~ NA_character_,
+    TRUE ~ "WTF"
+  )) %>%
+  mutate(duration_cat2 = as_factor(duration_cat2)) %>%
+  mutate(duration_cat2 = fct_relevel(duration_cat2, c("0-4 yrs", "5-9 yrs", "10-14 yrs", "15-19 yrs", "20-24 yrs", "25-29 yrs", "30+ yrs")))  %>%
   mutate(across(where(is.factor), fct_drop))
 
 # table for comparing 
@@ -155,4 +169,49 @@ data_onset %>%
   add_n() %>%
   bold_labels()
 
+# Overall comparison of complications by onset category
+data_onset %>% 
+  ggplot(aes(onset_cat)) + 
+  geom_bar(aes(fill = t2dm_macrovascular_microvascular)) +
+  theme_bw() +
+  scale_fill_bodl(labels = c("-MACRO -MICRO", "-MACRO +MICRO", "+MACRO -MICRO", "+MACRO +MICRO"))
 
+# Complications status by age of onset and time since
+data_onset %>% 
+  ggplot(aes(duration_cat2)) + 
+  geom_bar(aes(fill = t2dm_macrovascular_microvascular)) +
+  theme_bw() +
+  scale_fill_bodl(labels = c("-MACRO -MICRO", "-MACRO +MICRO", "+MACRO -MICRO", "+MACRO +MICRO"))+
+  facet_grid( ~ onset_cat)
+
+# extratc which participants do not develop complications after 20 years
+check <- data_onset %>%
+  dplyr::filter(t2dm_macrovascular_microvascular == "+T2DM -MACRO -MICRO") %>% 
+  dplyr::filter( duration_cat2 != "0-10 yrs") %>% 
+  dplyr::select(t2dm_diag_yrs_since_adj, clinicage_rnd, duration_cat, onset_cat)
+
+no_trouble <- data_onset %>%
+  dplyr::filter(t2dm_macrovascular_microvascular == "+T2DM -MACRO -MICRO") %>%
+  dplyr::filter(duration_cat2 != "0-4 yrs" & duration_cat2 != "5-9 yrs" & duration_cat2 != "10-14 yrs")  
+
+no_trouble %>%
+  dplyr::filter(onset_cat == "mid") %>%
+  dplyr::select(prophecyid)
+
+# baseline participants
+data_zerodx <- data_onset %>%
+  dplyr::filter(t2dm_diag_yrs_since_adj < 1)
+
+data_zerodx %>%
+  ggplot(aes(t2dm_macrovascular_microvascular)) + 
+  geom_bar(aes(fill = t2dm_macrovascular_microvascular)) +
+  theme_bw() +
+  scale_fill_bodl(labels = c("-MACRO -MICRO", "-MACRO +MICRO", "+MACRO -MICRO", "+MACRO +MICRO")) +
+  labs(x = "Complications") +
+  scale_x_discrete(label = c("-MACRO -MICRO", "-MACRO +MICRO", "+MACRO -MICRO", "+MACRO +MICRO"))
+
+data_zerodx %>%
+  ggplot(aes(onset_cat)) + 
+  geom_bar(aes(fill = t2dm_macrovascular_microvascular)) +
+  theme_bw() +
+  scale_fill_bodl(labels = c("-MACRO -MICRO", "-MACRO +MICRO", "+MACRO -MICRO", "+MACRO +MICRO"))
